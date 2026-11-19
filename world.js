@@ -5,10 +5,13 @@
    - Eisberge, Eis-Canyons, Klippen, Tunnel mit echten Kollisionen
    - Tag/Nacht-Tiefenlicht: ab 150 m stockdunkel
    - Fisch-Schwärme, Quallen, Rochen, Belugas, Narwale
+   - NEU: Grönlandhaie, Schwertfische, bunte Arktis-Saiblinge,
+          Laternenfische (leuchtende Lampe vor dem Maul),
+          glitzernde Heringsschwärme (einer begleitet das U-Boot vor der Glaskuppel)
    - 3 SEHENSWÜRDIGKEITEN (für die Touristen-Tour):
        0 = gesunkenes Schiffswrack (Meeresboden)
        1 = leuchtende Eiskristall-Kathedrale (schwebend)
-       2 = 150-Meter-Polar-Riesenwal (wandert umher)
+       2 = 150-Meter-Polar-Riesenwal (wandert umher, einziger Wal-Riese)
      Sie werden automatisch "besucht", sobald das U-Boot nah genug ist.
    - Radar-Pings (getPings), 2 Frost-Stalker (gewaltfrei, scheuen das Licht)
 
@@ -35,6 +38,7 @@
    const BOUNCE = 0.42;  // Rückprall-Stärke des U-Boots
    
    const UP = new THREE.Vector3(0, 1, 0);
+   const DEFAULT_SUB_DIR = new THREE.Vector3(0, 0, -1);
    
    /* ------------------------------------------------------------
       Zufall & Rauschen
@@ -287,7 +291,8 @@
      }, { srgb: true });
    }
    
-   // Leuchtmuster (Photophoren) für Fische, Stalker und Wal. v: 0.5 = linke Flanke, 0/1 = rechte, 0.25(Canvas) = Bauch
+   // Leuchtmuster (Photophoren) für Fische, Stalker und Wal.
+   // 'glitter' = kachelbare Funkel-Punkte für Heringe (wird animiert verschoben)
    function makeGlowMap(kind) {
      return canvasTexture(256, 64, (ctx, w, h) => {
        ctx.fillStyle = '#000';
@@ -311,8 +316,16 @@
            dot(x, y, 1.6 + rnd() * 2.4);
          }
          ctx.fillRect(0, h * 0.2, w, 2);
+       } else if (kind === 'glitter') {
+         const rnd = mulberry32(91);
+         for (let i = 0; i < 170; i++) dot(rnd() * w, rnd() * h, 0.8 + rnd() * 1.7);
+         for (let i = 0; i < 14; i++) {
+           const x = rnd() * w, y = rnd() * h;
+           ctx.fillRect(x - 5, y - 0.6, 10, 1.2);
+           ctx.fillRect(x - 0.6, y - 5, 1.2, 10);
+         }
        }
-     }, { repeat: false, srgb: true });
+     }, { repeat: kind === 'glitter', srgb: true });
    }
    
    /* ------------------------------------------------------------
@@ -722,6 +735,10 @@
    
    /* ------------------------------------------------------------
       Fisch-Schwärme (Boids + Hindernis-Ausweichen)
+      kind: 'fish' (Standard) | 'shark' | 'sword' | 'char' | 'lantern' | 'herring'
+      Optionen: cruise (Reisetempo m/s), tempo (Flossenschlag-Faktor), vis (Sichtweite m),
+                escort (begleitet das U-Boot vor der Glaskuppel), glitter (Glitzer-Effekt),
+                tight (sehr dicht), motley (bunte Flecken)
       ------------------------------------------------------------ */
    const SCHOOL_DEFS = [
      { count: 12, len: 2.6, depth: [8, 45],    region: [0, 20, 140],     top: 0x6f93a8, belly: 0xeaf6fa, fin: 0x9cc3d4, glow: null },
@@ -739,11 +756,49 @@
      { count: 12, len: 2.5, route: 'tunnel1', silver: true, top: 0x9ab0c0, belly: 0xf7fcff, fin: 0xd6e6ef, glow: null },
      { count: 12, len: 2.4, route: 'tunnel2', top: 0x23304f, belly: 0x66a8a0, fin: 0x35607a, glow: { kind: 'stripes', color: 0x66ffcc, i: 1.3 } },
      { count: 16, len: 2.3, depth: [10, 45], region: [-90, 20, 60],  silver: true, top: 0x90a4b3, belly: 0xf6fbff, fin: 0xcfdfe9, glow: null },
-     { count: 14, len: 2.6, depth: [14, 60], region: [70, 150, 70],  silver: true, top: 0x8499ab, belly: 0xf1f9fd, fin: 0xc3d6e3, glow: null }
+     { count: 14, len: 2.6, depth: [14, 60], region: [70, 150, 70],  silver: true, top: 0x8499ab, belly: 0xf1f9fd, fin: 0xc3d6e3, glow: null },
+   
+     // ---------- NEU: Grönlandhaie (groß, langsam, in den tieferen Schichten) ----------
+     { kind: 'shark', count: 2, len: 5.8, cruise: 1.7, tempo: 0.45, depth: [120, 260], region: [-40, -30, 170],
+       top: 0x474d54, belly: 0x9aa0a6, fin: 0x383d44, glow: null },
+     { kind: 'shark', count: 2, len: 6.4, cruise: 1.6, tempo: 0.45, depth: [150, 290], region: [130, 110, 130],
+       top: 0x4d4a48, belly: 0xa7a39d, fin: 0x3a3836, glow: null },
+     { kind: 'shark', count: 2, len: 5.4, cruise: 1.8, tempo: 0.5, depth: [100, 230], region: [-150, -70, 120],
+       top: 0x3f464e, belly: 0x8f969c, fin: 0x32383f, glow: null },
+   
+     // ---------- NEU: Schwertfische (schnell, mit Schwert) ----------
+     { kind: 'sword', count: 3, len: 4.2, cruise: 9.5, tempo: 1.3, depth: [18, 120], region: [60, -80, 210],
+       silver: true, top: 0x2f4a70, belly: 0xdfeaf2, fin: 0x3a5a86, glow: null },
+     { kind: 'sword', count: 3, len: 4.0, cruise: 10, tempo: 1.3, depth: [30, 150], region: [-120, 100, 190],
+       silver: true, top: 0x34506f, belly: 0xe4eef5, fin: 0x45628a, glow: null },
+   
+     // ---------- NEU: bunte Arktis-Saiblinge (flach, unter dem Eis) ----------
+     { kind: 'char', count: 8, len: 1.7, depth: [6, 34], region: [10, -30, 130], motley: true,
+       top: 0x5f7a46, belly: 0xff6a22, fin: 0xff9a4a, glow: null },
+     { kind: 'char', count: 7, len: 1.6, depth: [8, 40], region: [-80, -50, 120], motley: true,
+       top: 0x6e7c3a, belly: 0xe8b81e, fin: 0xf2d060, glow: null },
+     { kind: 'char', count: 7, len: 1.8, depth: [8, 38], region: [110, 70, 100], motley: true,
+       top: 0x4a5f9a, belly: 0xff5f9a, fin: 0xc08af0, glow: null },
+   
+     // ---------- NEU: Laternenfische (Tiefsee, leuchtende Lampe vor dem Maul) ----------
+     { kind: 'lantern', count: 10, len: 1.1, vis: 190, depth: [150, 290], region: [0, 0, 200],
+       top: 0x141c34, belly: 0x2c4a72, fin: 0x1e3358, glow: { kind: 'dots', color: 0x4fe8ff, i: 1.9 } },
+     { kind: 'lantern', count: 8, len: 1.0, vis: 190, depth: [110, 230], region: [-130, -100, 140],
+       top: 0x1a1730, belly: 0x3a3a78, fin: 0x2a2a58, glow: { kind: 'dots', color: 0x7fffd4, i: 1.8 } },
+   
+     // ---------- NEU: Heringe – dicht & glitzernd ----------
+     // Begleitschwarm: bleibt direkt vor der Glaskuppel des U-Boots
+     { kind: 'herring', count: 22, len: 0.95, vis: 160, escort: true, glitter: true, tight: true, silver: true, cruise: 6,
+       top: 0x7f9fb6, belly: 0xffffff, fin: 0xdfeaf2, glow: null },
+     { kind: 'herring', count: 14, len: 1.0, vis: 170, glitter: true, tight: true, silver: true, cruise: 4.2,
+       depth: [12, 70], region: [-20, 90, 100], top: 0x86a4ba, belly: 0xffffff, fin: 0xe4eef6, glow: null },
+     { kind: 'herring', count: 14, len: 1.0, vis: 170, glitter: true, tight: true, silver: true, cruise: 4.2,
+       depth: [30, 110], region: [100, -120, 110], top: 0x7b9bb2, belly: 0xffffff, fin: 0xdce8f1, glow: null }
    ];
    
    function fishSpec(L, def) {
-     return {
+     const kind = def.kind || 'fish';
+     const spec = {
        rings: 8, sides: 7, length: L, maxR: L * 0.16, wide: 0.55, tall: 1.0,
        prof: { nose: 0.72, shape: 0.75, taper: 0.45, tailMin: 0.09 },
        colors: { top: new THREE.Color(def.top), belly: new THREE.Color(def.belly), fin: new THREE.Color(def.fin) },
@@ -753,11 +808,82 @@
        dorsal: [{ at: 0.45, h: L * 0.16, len: L * 0.24 }],
        eyes: { at: 0.09, r: L * 0.032, spread: 0.9 }
      };
+     if (kind === 'shark') {
+       Object.assign(spec, {
+         rings: 14, sides: 8, maxR: L * 0.12, wide: 0.85, tall: 0.95,
+         prof: { nose: 0.85, shape: 0.7, taper: 0.55, tailMin: 0.06 },
+         wiggle: { axis: 'side', head: 0.08, pow: 1.2, waveLen: 0.55 },
+         tail: { span: L * 0.17, len: L * 0.2, notch: 0.45, axis: 'up' },
+         pec: { at: 0.26, len: L * 0.16, wid: L * 0.1, base: 0.5, amp: 0.2 },
+         dorsal: [{ at: 0.5, h: L * 0.07, len: L * 0.1 }, { at: 0.8, h: L * 0.035, len: L * 0.05 }],
+         eyes: { at: 0.07, r: L * 0.008, spread: 0.9 }
+       });
+     } else if (kind === 'sword') {
+       Object.assign(spec, {
+         rings: 12, sides: 7, maxR: L * 0.085, wide: 0.8, tall: 1.0,
+         prof: { nose: 0.62, shape: 0.72, taper: 0.55, tailMin: 0.05 },
+         wiggle: { axis: 'side', head: 0.06, pow: 1.5, waveLen: 0.7 },
+         tail: { span: L * 0.17, len: L * 0.13, notch: 0.4, axis: 'up' },
+         pec: { at: 0.28, len: L * 0.15, wid: L * 0.07, base: 0.6, amp: 0.25 },
+         dorsal: [{ at: 0.34, h: L * 0.12, len: L * 0.26 }, { at: 0.78, h: L * 0.04, len: L * 0.05 }],
+         eyes: { at: 0.09, r: L * 0.016, spread: 0.92 }
+       });
+     } else if (kind === 'char') {
+       Object.assign(spec, {
+         maxR: L * 0.15, wide: 0.6,
+         tail: { span: L * 0.22, len: L * 0.26, notch: 0.65, axis: 'up' },
+         dorsal: [{ at: 0.45, h: L * 0.15, len: L * 0.22 }, { at: 0.82, h: L * 0.05, len: L * 0.07 }],
+         eyes: { at: 0.09, r: L * 0.034, spread: 0.9 }
+       });
+     } else if (kind === 'lantern') {
+       Object.assign(spec, {
+         rings: 7, sides: 6, maxR: L * 0.2, wide: 0.75,
+         prof: { nose: 0.6, shape: 0.7, taper: 0.5, tailMin: 0.1 },
+         tail: { span: L * 0.28, len: L * 0.28, notch: 0.5, axis: 'up' },
+         dorsal: [{ at: 0.5, h: L * 0.13, len: L * 0.18 }],
+         eyes: { at: 0.1, r: L * 0.06, spread: 0.9 }
+       });
+     } else if (kind === 'herring') {
+       Object.assign(spec, {
+         rings: 7, sides: 6, maxR: L * 0.14, wide: 0.5,
+         tail: { span: L * 0.28, len: L * 0.3, notch: 0.45, axis: 'up' },
+         dorsal: [{ at: 0.45, h: L * 0.14, len: L * 0.2 }],
+         eyes: { at: 0.09, r: L * 0.04, spread: 0.9 }
+       });
+     }
+     return spec;
+   }
+   
+   // Saiblinge: bunte Flecken + helle Tupfer auf dem Körper
+   function paintChar(c, rnd) {
+     const col = c.geo.attributes.color, S = c.spec.sides, N = c.spec.rings;
+     const seed = Math.floor(rnd() * 1000);
+     for (let i = 0; i < N; i++) {
+       for (let j = 0; j < S; j++) {
+         const k = (i * S + j) * 3;
+         const h = hash3(i, j, seed, 77);
+         const f = 0.86 + 0.24 * hash3(i, j, seed, 78);
+         let r = col.array[k] * f, g = col.array[k + 1] * f, b = col.array[k + 2] * f;
+         if (h > 0.82) { r = r * 0.4 + 0.6; g = g * 0.4 + 0.55; b = b * 0.4 + 0.3; }
+         col.array[k] = r; col.array[k + 1] = g; col.array[k + 2] = b;
+       }
+     }
+     col.needsUpdate = true;
    }
    
    function createSchools(group, rnd, fishEyeMat, routes) {
      const schools = [];
      const materials = [];
+   
+     // gemeinsame Teile für Schwertfische und Laternenfische
+     const billMat = new THREE.MeshStandardMaterial({ color: 0xa9b4bf, roughness: 0.3, metalness: 0.55 });
+     const lampMat = new THREE.MeshBasicMaterial({ color: 0xd4fdff });
+     const lampGeo = new THREE.SphereGeometry(1, 10, 8);
+     const lampHaloMat = new THREE.SpriteMaterial({
+       map: makeGlowSprite('rgba(210,255,255,1)', 'rgba(70,210,255,0.45)'),
+       blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85
+     });
+   
      SCHOOL_DEFS.forEach((def) => {
        const mat = new THREE.MeshStandardMaterial({
          vertexColors: true, roughness: def.silver ? 0.16 : 0.32, metalness: def.silver ? 0.6 : 0.25, side: THREE.DoubleSide
@@ -766,15 +892,20 @@
          mat.emissive = new THREE.Color(def.glow.color);
          mat.emissiveMap = makeGlowMap(def.glow.kind);
          mat.emissiveIntensity = def.glow.i;
+       } else if (def.glitter) {
+         mat.emissive = new THREE.Color(0xdff6ff);
+         mat.emissiveMap = makeGlowMap('glitter');
+         mat.emissiveIntensity = 1.0;
        }
        materials.push(mat);
        const s = {
-         def, fish: [], target: new THREE.Vector3(), retarget: 0,
+         def, mat, t: rnd() * 10, fish: [], target: new THREE.Vector3(), retarget: 0,
          center: new THREE.Vector3(), avgDir: new THREE.Vector3(1, 0, 0),
          yMax: def.depth ? -def.depth[0] : -10, yMin: def.depth ? -def.depth[1] : -60,
          region: def.region ? { x: def.region[0], z: def.region[1], r: def.region[2] } : { x: 0, z: 0, r: 100 },
          route: null, routeIdx: 0, routeDir: 1
        };
+       if (def.escort) { s.yMax = WORLD.creatureCeil - 3; s.yMin = -400; }
        if (def.route) {
          s.route = (routes || []).find((r) => r.name === def.route) || null;
          if (s.route) {
@@ -789,12 +920,29 @@
        for (let k = 0; k < def.count; k++) {
          const L = def.len * (0.85 + rnd() * 0.3);
          const c = createCreature(fishSpec(L, def), mat, fishEyeMat);
+         if (def.kind === 'char') paintChar(c, rnd);
          const f = {
-           c, school: s, size: L, cruise: 2.6 + L * 0.55 + rnd() * 0.8,
-           pos: new THREE.Vector3(), vel: new THREE.Vector3()
+           c, school: s, size: L,
+           cruise: def.cruise ? def.cruise * (0.9 + rnd() * 0.25) : 2.6 + L * 0.55 + rnd() * 0.8,
+           tempo: def.tempo || 1, vis: def.vis || 240, ph: rnd() * 6.28,
+           pos: new THREE.Vector3(), vel: new THREE.Vector3(), bill: null, lamp: null
          };
+         if (def.kind === 'sword') {
+           const bill = new THREE.Mesh(new THREE.ConeGeometry(L * 0.011, L * 0.3, 6), billMat);
+           bill.frustumCulled = false;
+           c.group.add(bill);
+           f.bill = bill;
+         }
+         if (def.kind === 'lantern') {
+           const m = new THREE.Mesh(lampGeo, lampMat);
+           m.frustumCulled = false;
+           const h = new THREE.Sprite(lampHaloMat);
+           c.group.add(m);
+           c.group.add(h);
+           f.lamp = { m, h };
+         }
          // Startposition: freier Punkt in der Nähe des Schwarm-Ziels
-         const spreadXZ = s.route ? 9 : 30, spreadY = s.route ? 5 : 12;
+         const spreadXZ = s.route ? 9 : (def.escort ? 14 : 30), spreadY = s.route ? 5 : (def.escort ? 8 : 12);
          for (let tries = 0; tries < 24; tries++) {
            f.pos.set(s.target.x + (rnd() - 0.5) * spreadXZ, s.target.y + (rnd() - 0.5) * spreadY, s.target.z + (rnd() - 0.5) * spreadXZ);
            if (freeSpace(f.pos, 6)) break;
@@ -814,6 +962,12 @@
    }
    
    function pickSchoolTarget(s, rnd) {
+     if (s.def.escort) {
+       // Begleitschwarm: Startziel vor dem Spawn-Punkt des U-Boots, danach folgt er dem U-Boot (updateSchool)
+       s.target.set(0, -10, -14);
+       s.retarget = 1e9;
+       return;
+     }
      if (s.route) {
        const R = s.route.pts;
        s.routeIdx += s.routeDir * (5 + Math.floor(rnd() * 3));
@@ -837,14 +991,41 @@
    }
    
    function updateSchool(s, dt, ctx, rnd) {
-     s.retarget -= dt;
-     if (s.retarget <= 0 || (s.route && s.center.distanceToSquared(s.target) < 14 * 14)) pickSchoolTarget(s, rnd);
+     s.t += dt;
+     const def = s.def;
+   
+     // Heringe glitzern: Funkel-Textur wandert über die Körper
+     if (def.glitter && s.mat.emissiveMap) {
+       s.mat.emissiveMap.offset.set((s.t * 0.7) % 1, (s.t * 0.31) % 1);
+       s.mat.emissiveIntensity = 0.9 + 0.5 * Math.sin(s.t * 5);
+     }
+   
+     if (def.escort) {
+       // Begleitschwarm: Ziel immer ein Stück vor der Glaskuppel, leicht hin- und herschwingend
+       const dir = ctx.subDir || DEFAULT_SUB_DIR;
+       const sx = -dir.z, sz = dir.x;
+       const ahead = 15 + 4 * Math.sin(s.t * 0.35);
+       const side = 5 * Math.sin(s.t * 0.27);
+       s.target.set(
+         ctx.subPos.x + dir.x * ahead + sx * side,
+         Math.min(ctx.subPos.y + 1.2 * Math.sin(s.t * 0.5), s.yMax),
+         ctx.subPos.z + dir.z * ahead + sz * side
+       );
+       s.retarget = 1e9;
+     } else {
+       s.retarget -= dt;
+       if (s.retarget <= 0 || (s.route && s.center.distanceToSquared(s.target) < 14 * 14)) pickSchoolTarget(s, rnd);
+     }
+   
      // Schwarm-Mitte und mittlere Richtung
      s.center.set(0, 0, 0);
      s.avgDir.set(0, 0, 0);
      for (const f of s.fish) { s.center.add(f.pos); s.avgDir.add(f.vel); }
      s.center.multiplyScalar(1 / s.fish.length);
      s.avgDir.normalize();
+   
+     const avoidR = def.escort ? 8 : 22;
+     const sepK = def.tight ? 1.1 : 2.2;
    
      for (const f of s.fish) {
        const p = f.pos, v = f.vel;
@@ -861,7 +1042,7 @@
        // gleiche Richtung
        acc.addScaledVector(s.avgDir, 0.55);
        // Abstand zu Nachbarn
-       const sepR = f.size * 2.2;
+       const sepR = f.size * sepK;
        for (const o of s.fish) {
          if (o === f) continue;
          _t.subVectors(p, o.pos);
@@ -879,7 +1060,7 @@
        // U-Boot respektieren
        _t.subVectors(p, ctx.subPos);
        const ds = _t.length();
-       if (ds < 22 && ds > 0.01) acc.addScaledVector(_t, (1 - ds / 22) * 3.5 / ds);
+       if (ds < avoidR && ds > 0.01) acc.addScaledVector(_t, (1 - ds / avoidR) * 3.5 / ds);
        // Tiefenband
        if (p.y > s.yMax) acc.y -= 0.9;
        if (p.y < s.yMin) acc.y += 0.9;
@@ -887,7 +1068,9 @@
        v.addScaledVector(acc, 7.5 * dt);
        v.y *= 1 - dt * 0.7;
        let sp = v.length();
-       const maxSp = f.cruise * 1.35, minSp = f.cruise * 0.6;
+       let maxSp = f.cruise * 1.35;
+       const minSp = f.cruise * 0.6;
+       if (def.escort) maxSp = Math.max(maxSp, (ctx.subSpeed || 0) * 1.2 + 3);   // hält mit dem U-Boot Schritt
        if (sp > maxSp) v.multiplyScalar(maxSp / sp);
        else if (sp < minSp) { if (sp < 1e-3) v.set(1, 0, 0); v.setLength(minSp); }
        sp = v.length();
@@ -896,13 +1079,31 @@
        pushOutCreature(p, f.size * 0.45, v);
    
        f.c.follow(p);
-       f.c.phase += dt * (5 + sp * 1.7);
-       f.c.pecPhase += dt * (3 + sp * 0.8);
+       f.c.phase += dt * (5 + sp * 1.7) * f.tempo;
+       f.c.pecPhase += dt * (3 + sp * 0.8) * f.tempo;
    
        const dCam = p.distanceToSquared(ctx.camPos);
-       const near = dCam < 240 * 240;
+       const near = dCam < f.vis * f.vis;
        f.c.setVisible(near);
-       if (near) f.c.update(f.size * 0.11 * clamp(sp / f.cruise, 0.5, 1.4), 0.6 + 0.4 * clamp(sp / f.cruise, 0, 1.3));
+       if (near) {
+         f.c.update(f.size * 0.11 * clamp(sp / f.cruise, 0.5, 1.4), 0.6 + 0.4 * clamp(sp / f.cruise, 0, 1.3));
+         if (f.bill || f.lamp) {
+           _o.subVectors(f.c.pts[0], f.c.pts[1]).normalize();
+           if (f.bill) {
+             f.bill.position.copy(f.c.pts[0]).addScaledVector(_o, f.size * 0.15);
+             f.bill.quaternion.setFromUnitVectors(UP, _o);
+           }
+           if (f.lamp) {
+             // leuchtende Lampe vor dem Maul (pulsiert leicht)
+             f.lamp.m.position.copy(f.c.pts[0]).addScaledVector(_o, f.size * 0.32);
+             f.lamp.m.position.y += f.size * 0.06;
+             f.lamp.h.position.copy(f.lamp.m.position);
+             const pul = 1 + 0.18 * Math.sin(s.t * 4 + f.ph);
+             f.lamp.m.scale.setScalar(f.size * 0.085 * pul);
+             f.lamp.h.scale.setScalar(f.size * 2.4 * pul);
+           }
+         }
+       }
      }
    }
    
@@ -975,7 +1176,7 @@
      }
      return out;
    }
-
+   
    // Eis in den Canyons: tiefblau, mit senkrechten Schmelz-Streifen und türkisen Adern
    function canyonIceColor(x, y, z, nx, ny, nz, c) {
      const depthT = clamp(-y / 110, 0, 1);
@@ -986,7 +1187,7 @@
      c.r *= 1 - vein * 0.25; c.g *= 1 + vein * 0.06;
      if (y > -9) c.lerp(WHITE, 0.3);
    }
-
+   
    // Fels in Schluchten und Tunneln: dunkle Schichten, leicht bläulich-grün, Reif auf Oberseiten
    function canyonRockColor(x, y, z, nx, ny, nz, c) {
      const n = fbm3(x * 0.07, y * 0.07, z * 0.07, 9, 3);
@@ -996,14 +1197,14 @@
      if (strata > 0.8) { c.r *= 1.12; c.g *= 1.04; }
      c.lerp(FROST, smooth(0.5, 0.95, ny) * 0.45);
    }
-
+   
    /* ------------------------------------------------------------
       Arktis-Fauna: leuchtende Quallen, Rochen, Belugas, Narwale
       (Fisch-Schwärme stehen weiter oben bei SCHOOL_DEFS)
       ------------------------------------------------------------ */
    const _w1 = new THREE.Vector3(), _w2 = new THREE.Vector3(), _w3 = new THREE.Vector3(), _w4 = new THREE.Vector3();
    const _mat4 = new THREE.Matrix4(), _qa = new THREE.Quaternion(), _zAxis = new THREE.Vector3(0, 0, 1);
-
+   
    // Neues Wegpunkt-Ziel für ein wanderndes Tier (Route durch die Canyons, freies Wasser oder Vorbeiflug am U-Boot)
    function pickWanderWay(w, ctx, rnd) {
      _w1.subVectors(ctx.subPos, w.pos);
@@ -1037,13 +1238,13 @@
      }
      w.wayT = 22 + rnd() * 14;
    }
-
+   
    function stepWanderer(w, dt, ctx, rnd) {
      w.wayT -= dt;
      if (w.wayT <= 0 || w.pos.distanceToSquared(w.way) < w.reach * w.reach) pickWanderWay(w, ctx, rnd);
      moveHeading(w, w.way, w.speedT, w.turn, dt, w.size, 2.4);
    }
-
+   
    function makeWanderer(o, routes, rnd) {
      const w = {
        pos: new THREE.Vector3(), dir: new THREE.Vector3(1, 0, 0), speed: o.speedT, speedT: o.speedT, turn: o.turn,
@@ -1076,7 +1277,7 @@
      w.wayT = 1;
      return w;
    }
-
+   
    /* ---------- Leuchtquallen ---------- */
    const JELLY_PALETTES = [
      { bell: 0xc6f6ff, glow: 0x48d8ff, tent: [0.55, 0.95, 1.0], halo: 'rgba(120,235,255,0.85)' },
@@ -1084,7 +1285,7 @@
      { bell: 0xffd6ea, glow: 0xff6fb5, tent: [1.0, 0.5, 0.78], halo: 'rgba(255,130,190,0.85)' },
      { bell: 0xcfffe9, glow: 0x44ffb4, tent: [0.5, 1.0, 0.8], halo: 'rgba(110,255,200,0.85)' }
    ];
-
+   
    function createJelly(size, pi, shared, rnd) {
      const pal = shared.pal[pi];
      const g = new THREE.Group();
@@ -1097,7 +1298,7 @@
      const halo = new THREE.Sprite(pal.haloMat);
      halo.scale.set(size * 5.5, size * 5.5, 1);
      g.add(halo);
-
+   
      const T = 10, M = 8;
      const V = T * (M + 1) * 2;
      const pos = new Float32Array(V * 3);
@@ -1126,10 +1327,10 @@
      const tents = new THREE.Mesh(geo, pal.tentMat);
      tents.frustumCulled = false;
      g.add(tents);
-
+   
      const lens = [];
      for (let t = 0; t < T; t++) lens.push(size * (2.0 + 0.9 * rnd() + (t % 3) * 0.55));
-
+   
      const j = {
        g, bell, core, halo, pos: new THREE.Vector3(), vel: new THREE.Vector3(), size, phase: rnd() * 6.28,
        rate: 1.9 + rnd() * 0.7, heading: rnd() * 6.28, hSpeed: 0.5 + rnd() * 0.9, drift: (rnd() - 0.5) * 0.4,
@@ -1159,7 +1360,7 @@
      j.updateTentacles(0);
      return j;
    }
-
+   
    function updateJelly(j, dt, ctx, time) {
      j.phase += dt * j.rate;
      const s = Math.sin(j.phase), thrust = Math.max(0, Math.cos(j.phase));
@@ -1193,7 +1394,7 @@
      if (ds < 14 && ds > 0.01) v.addScaledVector(_w1, (1 - ds / 14) * 4 * dt / ds);
      p.addScaledVector(v, dt);
      pushOutCreature(p, j.size * 1.3, v);
-
+   
      const dCam = p.distanceToSquared(ctx.camPos);
      const near = dCam < 190 * 190;
      j.g.visible = near;
@@ -1207,7 +1408,7 @@
      j.halo.visible = dCam < 120 * 120;
      j.updateTentacles(time + j.tw);
    }
-
+   
    /* ---------- Rochen ---------- */
    function createRay(W, pal, eyeMat, mat) {
      const NX = 13, NZ = 9;
@@ -1295,7 +1496,7 @@
      ray.updateMesh(0.2);
      return ray;
    }
-
+   
    function updateRay(r, dt, ctx, rnd) {
      const w = r.w;
      stepWanderer(w, dt, ctx, rnd);
@@ -1314,7 +1515,7 @@
      r.g.quaternion.multiply(_qa.setFromAxisAngle(_zAxis, r.bank));
      r.updateMesh(0.2 * clamp(w.speed / 3, 0.5, 1.3));
    }
-
+   
    /* ---------- Belugas & Narwale (Segment-Körper wie Fische/Wal) ---------- */
    function cetaceanSpec(L, kind) {
      const nar = kind === 'narwhal';
@@ -1331,7 +1532,7 @@
        eyes: { at: 0.15, r: L * 0.02, spread: 0.97 }
      };
    }
-
+   
    function createPod(o, routes, rnd, group, mats, tuskMat) {
      const nar = o.kind === 'narwhal';
      const leader = makeWanderer({
@@ -1386,7 +1587,7 @@
      for (const m of pod.members) { m.c.place(m.pos, m.dir); m.c.update(0.1, 0.4); }
      return pod;
    }
-
+   
    function updatePod(pod, dt, ctx, rnd) {
      const lw = pod.leader;
      stepWanderer(lw, dt, ctx, rnd);
@@ -1419,12 +1620,12 @@
        }
      }
    }
-
+   
    /* ---------- alles zusammen ---------- */
    // plan: Beschreibung der Tiere (siehe FAUNA_PLAN), routes: Canyon-Mittellinien
    function createFauna(group, rnd, eyeMat, routes, plan) {
      const jellies = [], rays = [], pods = [];
-
+   
      // geteilte Geometrien/Materialien (spart Speicher)
      const shared = {
        bellGeo: new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.58),
@@ -1470,7 +1671,7 @@
          jellies.push(j);
        }
      }
-
+   
      const rayMats = {
        ice: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide, emissive: 0x3aa8d8, emissiveIntensity: 0.18 }),
        dark: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide })
@@ -1494,7 +1695,7 @@
          rays.push(r);
        }
      }
-
+   
      const mats = {
        bel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.04, side: THREE.DoubleSide }),
        nar: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.46, metalness: 0.04, side: THREE.DoubleSide }),
@@ -1502,7 +1703,7 @@
      };
      const tuskMat = new THREE.MeshStandardMaterial({ color: 0xf1ead8, roughness: 0.35, metalness: 0.05 });
      for (const pp of plan.pods) pods.push(createPod(pp, routes, rnd, group, mats, tuskMat));
-
+   
      return {
        jellies, rays, pods,
        update(dt, ctx, time) {
@@ -1544,7 +1745,7 @@
        { kind: 'narwhal', count: 2, size: 4.9, speed: 3.3, region: { x: 150, z: -120, r: 100 }, yMin: -70, yMax: -18, curious: 0.5 }
      ]
    };
-
+   
    /* ------------------------------------------------------------
       Farb-Funktionen für Eis, Fels, Meeresboden
       ------------------------------------------------------------ */
@@ -1962,7 +2163,7 @@
      const newFeature = (kind, detail) => { const l = []; l.detail = detail || CANYON_DETAIL; (kind === 'ice' ? iceFeat : rockFeat).push(l); return l; };
      const decoBlob = (list, x, y, z, r, amp, freq, seed) => { list.push({ x, y, z, r, amp, freq, seed }); };
      const _fx = new THREE.Vector3(), _fy = new THREE.Vector3(), _fz = new THREE.Vector3();
-
+   
      // Eisbogen quer über eine Schlucht (Brücken-Bogen, unten bleibt die Schlucht frei)
      function lintel(list, p, nx, nz, hh, r0, crownY, seed) {
        const half = hh + r0 * 0.7;
@@ -1976,7 +2177,7 @@
          addBlob(list, p.x + nx * c, cy + Math.sin(th) * Hh, p.z + nz * c, rb * (0.95 + 0.2 * hash3(k, seed, 3, 41)), 0.2, 2.4, seed + k);
        }
      }
-
+   
      // Schlucht aus zwei Wänden entlang einer Mittellinie
      //  ice : Wände hängen von der Eisdecke herab (Eiszapfen-Spitzen, Felsbrocken im Eis)
      //  rock: Wände wachsen vom Meeresboden hoch (Klippen mit Überhang)
@@ -2049,7 +2250,7 @@
        });
        routes.push({ name: o.name, kind: o.kind, pts: rt, halfWidth: o.h[0] });
      }
-
+   
      // Tunnel: Ringe aus Blobs um eine 3D-Mittellinie, außen eine zweite, dickere Hülle
      function buildTunnel(o) {
        const ice = o.kind === 'ice';
@@ -2093,7 +2294,7 @@
        }
        routes.push({ name: o.name, kind: o.kind, pts: rt, halfWidth: o.R });
      }
-
+   
      // Freistehende Säule (schwebend oder von der Decke hängend), unten spitz
      function buildPillar(list, x, z, yTop, yBot, r, seed) {
        const H = yTop - yBot;
@@ -2105,7 +2306,7 @@
          addBlob(list, x + wx, yTop - t * H, z + wz, rr, 0.22, 2.6, seed + k * 3);
        }
      }
-
+   
      // Gletscher-Tor: zwei Beine + Bogen darüber, darunter kann man hindurchfahren
      function buildGate(list, x, z, yaw, half, crownY, legBottom, r, seed) {
        const ax = Math.cos(yaw), az = Math.sin(yaw);
@@ -2125,7 +2326,7 @@
          }
        }
      }
-
+   
      // Prüft (nur beim Bauen), ob an einer Stelle schon etwas steht
      function spotFree(x, y, z, r, pad) {
        for (let i = 0; i < COLS.length; i++) {
@@ -2143,7 +2344,7 @@
        return true;
      }
      const keepOut = (x, z, extra) => Math.hypot(x, z) < 62 + extra || inZone(x, z, 10 + extra) || Math.hypot(x - 70, z + 55) < 78 + extra;
-
+   
      // ---- Eis-Canyons (unter der Eisdecke) ----
      buildCanyon({ name: 'ice1', kind: 'ice', ctrl: [[58, 36], [90, 58], [122, 48], [152, 72]], r: 10, h: [9.5, 12.5], depth: [38, 58],
        jag: 0.3, over: 0, wob: 6, seed: 11, rY: [-30, -42], rWave: 4, arches: [0.38, 0.72], archY: -15 });
@@ -2151,19 +2352,19 @@
        jag: 0.3, over: 0, wob: 5, seed: 23, rY: [-32, -44], rWave: 4, arches: [0.5], archY: -15 });
      buildCanyon({ name: 'ice3', kind: 'ice', ctrl: [[100, -10], [128, -36], [160, -26], [182, -54]], r: 10, h: [9.5, 12.5], depth: [38, 58],
        jag: 0.3, over: 0, wob: 7, seed: 37, rY: [-30, -40], rWave: 3, arches: [0.45], archY: -15 });
-
+   
      // ---- Tiefe Klippen-Schluchten (vom Meeresgrund bis knapp unter die Oberfläche) ----
      buildCanyon({ name: 'gorge1', kind: 'rock', ctrl: [[-150, 196], [-180, 230], [-152, 268], [-182, 304]], r: 22, h: [10, 13], rowStep: 1.0,
        top: [-26, -54], jag: 0.2, over: 0.4, wob: 5, seed: 41, rY: [-40, -150], rWave: 2.2 });
      buildCanyon({ name: 'gorge2', kind: 'rock', ctrl: [[232, -92], [264, -134], [302, -118], [332, -160]], r: 22, h: [10, 13], rowStep: 1.0,
        top: [-24, -50], jag: 0.2, over: 0.4, wob: 6, seed: 53, rY: [-40, -140], rWave: 2.2 });
-
+   
      // ---- Tunnel ----
      buildTunnel({ name: 'tunnel1', kind: 'ice', ctrl: [[104, -34, -128], [132, -36, -168], [140, -34, -210], [118, -38, -252]],
        R: 9, hallR: 6, hall: [0.4, 0.5, 0.6, 0.7], rb: 7.5, seed: 61 });
      buildTunnel({ name: 'tunnel2', kind: 'rock', ctrl: [[10, -100, 250], [50, -104, 275], [96, -98, 270], [134, -106, 246]],
        R: 9, hallR: 5, hall: [0.4, 0.5, 0.6, 0.7], rb: 7.5, seed: 71 });
-
+   
      // ---- Eis-Säulen: schwebend und von der Decke hängend, in kleinen "Eiswäldern" ----
      {
        const pillFeat = newFeature('ice', Math.max(1, CANYON_DETAIL - 1));
@@ -2188,7 +2389,7 @@
          }
        });
      }
-
+   
      // ---- Gletscher-Tore (freistehende Bögen) ----
      {
        const gateFeat = newFeature('ice', Math.max(1, CANYON_DETAIL - 1));
@@ -2204,7 +2405,7 @@
          gates++;
        }
      }
-
+   
      // ---- Fels-Riffe: Zinnen vom Meeresgrund + hohe Klippen-Türme (ab ca. 18 m Tiefe) ----
      {
        const reef = newFeature('rock', 3);
@@ -2242,12 +2443,12 @@
          fingers++;
        }
      }
-
+   
      // ---- Meshes (ein Mesh je Baugruppe -> Frustum-Culling) ----
      iceFeat.forEach((l) => { if (l.length) group.add(new THREE.Mesh(buildBlobGeometry(l, l.detail, canyonIceColor), iceMat)); });
      const canyonRockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.84, metalness: 0.02 });
      rockFeat.forEach((l) => { if (l.length) group.add(new THREE.Mesh(buildBlobGeometry(l, l.detail, canyonRockColor), canyonRockMat)); });
-
+   
      // Leuchtende Eiskristalle in den Tunneln
      if (glowPts.length) {
        const gp = new Float32Array(glowPts.length * 3), gc = new Float32Array(glowPts.length * 3);
@@ -2575,6 +2776,7 @@
      }
    
      /* ---------- SEHENSWÜRDIGKEIT 3: Polar-Riesenwal (150 m, gesund & leuchtend) ---------- */
+     // Der einzige Wal in diesem Level, der so groß ist – die anderen Wale (Belugas, Narwale) sind klein.
      const whaleGlowMap = makeGlowMap('whale');
      const whaleFloor = floorHeight(WHALE_HOME.x, WHALE_HOME.z);
      const whale = {
@@ -2721,13 +2923,14 @@
      const _cam = new THREE.Vector3();
      let platformActive = false;
    
+     // ctx: { subPos, camPos, light, thrust, bubblePos, subDir (Fahrtrichtung), subSpeed (m/s) }
      function update(dt, ctx) {
        dt = Math.min(dt, 0.05);
        time += dt;
        const cam = ctx.camPos || ctx.subPos;
        _cam.copy(cam);
        const light = ctx.light || defaultLight;
-       const full = { subPos: ctx.subPos, camPos: cam };
+       const full = { subPos: ctx.subPos, camPos: cam, subDir: ctx.subDir || DEFAULT_SUB_DIR, subSpeed: ctx.subSpeed || 0 };
    
        // Nebelscheinwerfer: dünnerer Nebel, solange das Licht an ist
        fogMul = lerp(fogMul, (light.on && light.fogPen) ? 0.55 : 1, clamp(dt * 3, 0, 1));
